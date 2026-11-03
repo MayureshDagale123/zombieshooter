@@ -1,0 +1,145 @@
+#ifndef FONT_RENDERER_HPP
+#define FONT_RENDERER_HPP
+
+#include "CG_Algorithms.hpp"
+#include <string>
+#include <cctype>
+#include <cstring>
+
+// =======================================================================
+// VECTOR & BITMAP FONT RENDERER FOR COMPUTER GRAPHICS
+// Renders text directly onto our Framebuffer using DDA / pixel blocks.
+// No external font libraries needed.
+// =======================================================================
+
+namespace FontRenderer {
+
+    // 5x7 Standard Font Matrix definition for alphanumeric and basic punctuation
+    // 5 columns per character, 7 rows. 1 bit = pixel on.
+    inline const uint8_t* get_char_bitmap(char c) {
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+
+        static uint8_t font_table[128][5];
+        static bool initialized = false;
+
+        if (!initialized) {
+            std::memset(font_table, 0, sizeof(font_table));
+
+            auto set_char = [](char ch, uint8_t c0, uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4) {
+                font_table[(unsigned char)ch][0] = c0;
+                font_table[(unsigned char)ch][1] = c1;
+                font_table[(unsigned char)ch][2] = c2;
+                font_table[(unsigned char)ch][3] = c3;
+                font_table[(unsigned char)ch][4] = c4;
+            };
+
+            set_char(' ', 0x00, 0x00, 0x00, 0x00, 0x00);
+            set_char('!', 0x00, 0x00, 0x5F, 0x00, 0x00);
+            set_char('"', 0x00, 0x07, 0x00, 0x07, 0x00);
+            set_char('#', 0x14, 0x7F, 0x14, 0x7F, 0x14);
+            set_char('$', 0x24, 0x2A, 0x7F, 0x2A, 0x12);
+            set_char('%', 0x23, 0x13, 0x08, 0x64, 0x62);
+            set_char('&', 0x36, 0x49, 0x55, 0x22, 0x50);
+            set_char('\'', 0x00, 0x05, 0x03, 0x00, 0x00);
+            set_char('(', 0x00, 0x1C, 0x22, 0x41, 0x00);
+            set_char(')', 0x00, 0x41, 0x22, 0x1C, 0x00);
+            set_char('*', 0x14, 0x08, 0x3E, 0x08, 0x14);
+            set_char('+', 0x08, 0x08, 0x3E, 0x08, 0x08);
+            set_char(',', 0x00, 0x50, 0x30, 0x00, 0x00);
+            set_char('-', 0x08, 0x08, 0x08, 0x08, 0x08);
+            set_char('.', 0x00, 0x60, 0x60, 0x00, 0x00);
+            set_char('/', 0x20, 0x10, 0x08, 0x04, 0x02);
+
+            set_char('0', 0x3E, 0x51, 0x49, 0x45, 0x3E);
+            set_char('1', 0x00, 0x42, 0x7F, 0x40, 0x00);
+            set_char('2', 0x42, 0x61, 0x51, 0x49, 0x46);
+            set_char('3', 0x21, 0x41, 0x45, 0x4B, 0x31);
+            set_char('4', 0x18, 0x14, 0x12, 0x7F, 0x10);
+            set_char('5', 0x27, 0x45, 0x45, 0x45, 0x39);
+            set_char('6', 0x3C, 0x4A, 0x49, 0x49, 0x30);
+            set_char('7', 0x01, 0x71, 0x09, 0x05, 0x03);
+            set_char('8', 0x36, 0x49, 0x49, 0x49, 0x36);
+            set_char('9', 0x06, 0x49, 0x49, 0x29, 0x1E);
+
+            set_char(':', 0x00, 0x36, 0x36, 0x00, 0x00);
+            set_char(';', 0x00, 0x56, 0x36, 0x00, 0x00);
+            set_char('<', 0x08, 0x14, 0x22, 0x41, 0x00);
+            set_char('=', 0x14, 0x14, 0x14, 0x14, 0x14);
+            set_char('>', 0x00, 0x41, 0x22, 0x14, 0x08);
+            set_char('?', 0x02, 0x01, 0x51, 0x09, 0x06);
+            set_char('@', 0x32, 0x49, 0x79, 0x41, 0x3E);
+
+            set_char('A', 0x7E, 0x11, 0x11, 0x11, 0x7E);
+            set_char('B', 0x7F, 0x49, 0x49, 0x49, 0x36);
+            set_char('C', 0x3E, 0x41, 0x41, 0x41, 0x22);
+            set_char('D', 0x7F, 0x41, 0x41, 0x22, 0x1C);
+            set_char('E', 0x7F, 0x49, 0x49, 0x49, 0x41);
+            set_char('F', 0x7F, 0x09, 0x09, 0x09, 0x01);
+            set_char('G', 0x3E, 0x41, 0x49, 0x49, 0x7A);
+            set_char('H', 0x7F, 0x08, 0x08, 0x08, 0x7F);
+            set_char('I', 0x00, 0x41, 0x7F, 0x41, 0x00);
+            set_char('J', 0x20, 0x40, 0x41, 0x3F, 0x01);
+            set_char('K', 0x7F, 0x08, 0x14, 0x22, 0x41);
+            set_char('L', 0x7F, 0x40, 0x40, 0x40, 0x40);
+            set_char('M', 0x7F, 0x02, 0x0C, 0x02, 0x7F);
+            set_char('N', 0x7F, 0x04, 0x08, 0x10, 0x7F);
+            set_char('O', 0x3E, 0x41, 0x41, 0x41, 0x3E);
+            set_char('P', 0x7F, 0x09, 0x09, 0x09, 0x06);
+            set_char('Q', 0x3E, 0x41, 0x51, 0x21, 0x5E);
+            set_char('R', 0x7F, 0x09, 0x19, 0x29, 0x46);
+            set_char('S', 0x46, 0x49, 0x49, 0x49, 0x31);
+            set_char('T', 0x01, 0x01, 0x7F, 0x01, 0x01);
+            set_char('U', 0x3F, 0x40, 0x40, 0x40, 0x3F);
+            set_char('V', 0x1F, 0x20, 0x40, 0x20, 0x1F);
+            set_char('W', 0x7F, 0x20, 0x18, 0x20, 0x7F);
+            set_char('X', 0x63, 0x14, 0x08, 0x14, 0x63);
+            set_char('Y', 0x07, 0x08, 0x70, 0x08, 0x07);
+            set_char('Z', 0x61, 0x51, 0x49, 0x45, 0x43);
+
+            set_char('[', 0x00, 0x7F, 0x41, 0x41, 0x00);
+            set_char('\\', 0x02, 0x04, 0x08, 0x10, 0x20);
+            set_char(']', 0x00, 0x41, 0x41, 0x7F, 0x00);
+            set_char('_', 0x80, 0x80, 0x80, 0x80, 0x80);
+
+            initialized = true;
+        }
+
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (uc >= 128) return font_table[(unsigned char)' '];
+        return font_table[uc];
+    }
+
+    // Draws scaled text using our framebuffer put_pixel
+    inline void draw_text(Framebuffer& fb, const std::string& text, int start_x, int start_y, Color color, int scale = 2) {
+        int cursor_x = start_x;
+        int cursor_y = start_y;
+
+        for (char ch : text) {
+            if (ch == '\n') {
+                cursor_x = start_x;
+                cursor_y += 9 * scale;
+                continue;
+            }
+
+            const uint8_t* bitmap = get_char_bitmap(ch);
+
+            for (int col = 0; col < 5; ++col) {
+                uint8_t line = bitmap[col];
+                for (int row = 0; row < 7; ++row) {
+                    if (line & (1 << row)) {
+                        for (int dy = 0; dy < scale; ++dy) {
+                            for (int dx = 0; dx < scale; ++dx) {
+                                fb.put_pixel(cursor_x + col * scale + dx, cursor_y + row * scale + dy, color);
+                            }
+                        }
+                    }
+                }
+            }
+
+            cursor_x += (5 + 1) * scale; // 5 width + 1 pixel spacing
+        }
+    }
+
+} // namespace FontRenderer
+
+#endif // FONT_RENDERER_HPP
